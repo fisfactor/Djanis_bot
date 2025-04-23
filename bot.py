@@ -1,24 +1,25 @@
 import os
 import logging
-import time
 import asyncio
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
-import openai
+from openai import OpenAI
+from openai.types.chat import ChatCompletionMessageParam
 
-# 🔑 Получаем ключи из переменных среды
+# 🔑 Ключи из среды
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-openai.api_key = OPENAI_API_KEY
+# 🧠 Клиент OpenAI
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # 🔧 Логгирование
 logging.basicConfig(level=logging.INFO)
 
-# 👥 Состояние пользователей
+# 👥 Состояние пользователя
 user_specialists = {}
 
-# 📋 Стиль общения каждого ассистента
+# 📋 Стиль общения ассистентов
 specialists = {
     "🎨 ВИЗУАЛЫ": "Ты — AI-Генератор визуалов. Помогаешь придумывать креативные идеи для Reels, Stories и визуального контента. Опиши визуально, вдохновляюще, с метафорами.",
     "⚖️ ПРАВОВЕД": "Ты — AI-Правовед. Защищаешь права Человека, опираясь на международные нормы, говоришь официальным и уверенным языком.",
@@ -26,7 +27,7 @@ specialists = {
     "🌱 ЛИЧНОСТЬ": "Ты — AI-Помощник Личностного Роста. Помогаешь Человеку раскрыться, обрести гармонию и связь с Творцом. Используй мягкий тон, образы, метафоры."
 }
 
-# 🟢 /start — выбор ассистента
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [KeyboardButton("🎨 ВИЗУАЛЫ"), KeyboardButton("⚖️ ПРАВОВЕД")],
@@ -35,7 +36,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text("Выбери ассистента для общения:", reply_markup=reply_markup)
 
-# ✍️ Обработка текста и запоминание выбора
+# Выбор ассистента или сообщение
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_message = update.message.text.strip()
@@ -55,28 +56,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔄 Обрабатываю запрос...")
 
     try:
-        response = openai.ChatCompletion.create(
+        messages: list[ChatCompletionMessageParam] = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ]
+            messages=messages
         )
-        reply = response.choices[0].message["content"]
+        reply = response.choices[0].message.content
         await update.message.reply_text(reply)
 
     except Exception as e:
         logging.error(f"❌ Ошибка OpenAI: {e}")
-        await update.message.reply_text("⚠️ Произошла ошибка при обращении к ИИ. Попробуй позже или проверь API-ключ.")
+        await update.message.reply_text("⚠️ Ошибка при обращении к ИИ. Проверь API-ключ или попробуй позже.")
 
-# ▶️ Запуск бота
+# Запуск
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    logging.info("🚀 Бот запущен и ожидает команды...")
+    logging.info("🚀 Бот запущен и ожидает команд...")
     app.run_polling()
 
 if __name__ == "__main__":
