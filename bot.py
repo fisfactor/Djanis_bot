@@ -1,6 +1,5 @@
 import os
 import logging
-import asyncio
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from openai import OpenAI
@@ -29,6 +28,7 @@ specialists = {
 
 # /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_specialists.pop(update.effective_user.id, None)  # сброс выбора ассистента
     keyboard = [
         [KeyboardButton("🎨 ВИЗУАЛЫ"), KeyboardButton("⚖️ ПРАВОВЕД")],
         [KeyboardButton("📜 ВЕКСЕЛЬ"), KeyboardButton("🌱 ЛИЧНОСТЬ")]
