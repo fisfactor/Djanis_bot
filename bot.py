@@ -38,7 +38,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_first_intro_shown.pop(update.effective_user.id, None)
     keyboard = [[KeyboardButton(name)] for name in specialists_data.keys()]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    await update.message.reply_text(🌟 "Выбери Советника для общения:" 🌟, reply_markup=reply_markup)
+    await update.message.reply_text("Выбери Советника для общения:", reply_markup=reply_markup)
 
 # 📍 /info
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
