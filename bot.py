@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
@@ -9,7 +10,7 @@ from openai.types.chat import ChatCompletionMessageParam
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# 🧠 Клиент OpenAI
+# 🧐 Клиент OpenAI
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # 🔧 Логгирование
@@ -17,41 +18,58 @@ logging.basicConfig(level=logging.INFO)
 
 # 👥 Состояние пользователя
 user_specialists = {}
+user_first_intro_shown = {}
+specialists_data = {}
 
-# 📋 Стиль общения ассистентов
-specialists = {
-    "🎨 ВИЗУАЛЫ": "Ты — AI-Генератор визуалов. Помогаешь придумывать креативные идеи для Reels, Stories и визуального контента. Опиши визуально, вдохновляюще, с метафорами.",
-    "⚖️ ПРАВОВЕД": "Ты — AI-Правовед. Защищаешь права Человека, опираясь на международные нормы, говоришь официальным и уверенным языком.",
-    "📜 ВЕКСЕЛЬ": "Ты — AI-ассистент по вексельному праву. Отвечаешь строго юридически, даёшь ссылки на статьи и нормы права.",
-    "🌱 ЛИЧНОСТЬ": "Ты — AI-Помощник Личностного Роста. Помогаешь Человеку раскрыться, обрести гармонию и связь с Творцом. Используй мягкий тон, образы, метафоры."
-}
+# 📚 Загрузка конфигураций советников
+ADVISORS_PATH = "advisors"
 
-# /start
+def load_specialists():
+    global specialists_data
+    for filename in os.listdir(ADVISORS_PATH):
+        if filename.endswith(".json"):
+            with open(os.path.join(ADVISORS_PATH, filename), "r", encoding="utf-8") as f:
+                data = json.load(f)
+                specialists_data[data["name"]] = data
+
+# 📅 /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_specialists.pop(update.effective_user.id, None)  # сброс выбора ассистента
-    keyboard = [
-        [KeyboardButton("🎨 ВИЗУАЛЫ"), KeyboardButton("⚖️ ПРАВОВЕД")],
-        [KeyboardButton("📜 ВЕКСЕЛЬ"), KeyboardButton("🌱 ЛИЧНОСТЬ")]
-    ]
+    user_specialists.pop(update.effective_user.id, None)
+    user_first_intro_shown.pop(update.effective_user.id, None)
+    keyboard = [[KeyboardButton(name)] for name in specialists_data.keys()]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    await update.message.reply_text("Выбери ассистента для общения:", reply_markup=reply_markup)
+    await update.message.reply_text(🌟 "Выбери Советника для общения:" 🌟, reply_markup=reply_markup)
 
-# Выбор ассистента или сообщение
+# 📍 /info
+async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id in user_specialists:
+        specialist_name = user_specialists[user_id]
+        intro = specialists_data[specialist_name].get("short_intro", "")
+        await update.message.reply_text(f"🛏️\n✨ *{specialist_name}* ✨\n\n{intro}", parse_mode="Markdown")
+    else:
+        await update.message.reply_text("❌ Пока Советник не выбран. Введи /start и выбери Советника.")
+
+# 💬 Обработка текста
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_message = update.message.text.strip()
 
-    if user_message in specialists:
+    if user_message in specialists_data:
         user_specialists[user_id] = user_message
-        await update.message.reply_text(f"Теперь ты общаешься с ассистентом: {user_message}")
+        if user_id not in user_first_intro_shown:
+            user_first_intro_shown[user_id] = True
+            intro = specialists_data[user_message].get("short_intro", "")
+            await update.message.reply_text(f"🛏️\n✨ *{user_message}* ✨\n\n{intro}", parse_mode="Markdown")
+        await update.message.reply_text(f"👋 Теперь ты общаешься с Советником: *{user_message}*", parse_mode="Markdown")
         return
 
     if user_id not in user_specialists:
-        await update.message.reply_text("Сначала выбери ассистента через /start 🙏")
+        await update.message.reply_text("🚷 Сначала выбери Советника через /start 🚷")
         return
 
-    specialist = user_specialists[user_id]
-    system_prompt = specialists[specialist]
+    specialist_name = user_specialists[user_id]
+    system_prompt = specialists_data[specialist_name].get("system_prompt", "")
 
     await update.message.reply_text("🔄 Обрабатываю запрос...")
 
@@ -70,12 +88,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logging.error(f"❌ Ошибка OpenAI: {e}")
-        await update.message.reply_text("⚠️ Ошибка при обращении к ИИ. Проверь API-ключ или попробуй позже.")
+        await update.message.reply_text("⚠️ Ошибка при общении с ИИ. Попробуй позже или проверь API-ключ.")
 
-# Запуск
+# ▶️ Запуск
+
 def main():
+    load_specialists()
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("info", info))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     logging.info("🚀 Бот запущен и ожидает команд...")
     app.run_polling()
