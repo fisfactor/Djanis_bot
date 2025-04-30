@@ -46,19 +46,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text in specialists:
         active_specialists[chat_id] = text  # Сохраняем выбор Советника
+        user_states[chat_id] = {"advisor": text, "greeted": False}
+
         specialist = specialists[text]
-        if not specialist.get("shown", False):
+
+        if not user_states[chat_id]["greeted"]:
             await update.message.reply_text(specialist.get("welcome", "⚠️ Приветствие не найдено."), parse_mode=ParseMode.HTML)
-            specialist["shown"] = True
+            user_states[chat_id]["greeted"] = True
+
         await update.message.reply_text(f"👋 Теперь ты общаешься с Советником: <b>{text}</b>", parse_mode=ParseMode.HTML)
+
     elif text == "/INFO":
         current = active_specialists.get(chat_id)
         if current and current in specialists:
             await update.message.reply_text(specialists[current].get("welcome", "⚠️ Приветствие не найдено."), parse_mode=ParseMode.HTML)
         else:
             await update.message.reply_text("❓ Сначала выбери Советника через /start.")
+
     elif chat_id in active_specialists:
-        # Пользователь ранее выбрал Советника, продолжаем диалог
         current = active_specialists[chat_id]
         specialist = specialists.get(current)
 
@@ -68,7 +73,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         system_prompt = specialist["system_prompt"]
 
-        # Отправка сообщения в OpenAI API
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -79,6 +83,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         reply = response.choices[0].message["content"]
         await update.message.reply_text(reply)
+
     else:
         await update.message.reply_text("❓ Неизвестный Советник. Пожалуйста, выбери из списка через /start.")
 
