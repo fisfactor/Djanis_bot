@@ -4,6 +4,9 @@ import os
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
+# Храним активных Советников по chat_id
+active_specialists = {}
+
 # Путь к директории с конфигурациями
 ADVISORS_PATH = "./advisors"
 
@@ -38,20 +41,47 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Сначала выбери Советника через команду /start.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.chat_id
-    text = update.message.text.upper()
+    chat_id = update.message.chat_id
+    text = update.message.text.strip().upper()
 
     if text in specialists:
-        previous = user_states.get(user_id)
-        user_states[user_id] = text
+        active_specialists[chat_id] = text  # Сохраняем выбор Советника
+        specialist = specialists[text]
+        if not specialist.get("shown", False):
+            await update.message.reply_text(specialist["greeting"], parse_mode=ParseMode.HTML)
+            specialist["shown"] = True
+        await update.message.reply_text(f"👋 Теперь ты общаешься с Советником: <b>{text}</b>", parse_mode=ParseMode.HTML)
+    elif text == "/INFO":
+        current = active_specialists.get(chat_id)
+        if current and current in specialists:
+            await update.message.reply_text(specialists[current]["greeting"], parse_mode=ParseMode.HTML)
+        else:
+            await update.message.reply_text("❓ Сначала выбери Советника через /start.")
+    elif chat_id in active_specialists:
+        # Пользователь ранее выбрал Советника, продолжаем диалог
+        current = active_specialists[chat_id]
+        specialist = specialists.get(current)
 
-        if text != previous:
-            welcome = specialists[text].get("welcome", "Рад встрече!")
-            await update.message.reply_text(f"📜 {welcome}")
+        if not specialist:
+            await update.message.reply_text("⚠️ Возникла ошибка с загрузкой Советника.")
+            return
 
-        await update.message.reply_text(f"👋 Теперь ты общаешься с Советником: {text}")
+        system_prompt = specialist["system_prompt"]
+
+        # Отправка сообщения в OpenAI API
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text}
+            ]
+        )
+
+        reply = response.choices[0].message["content"]
+        await update.message.reply_text(reply)
     else:
         await update.message.reply_text("❓ Неизвестный Советник. Пожалуйста, выбери из списка через /start.")
+
 
 def main():
     app = ApplicationBuilder().token(os.environ["TELEGRAM_TOKEN"]).build()
