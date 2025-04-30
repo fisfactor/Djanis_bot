@@ -22,7 +22,8 @@ specialists = load_specialists()
 user_states = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[s] for s in sorted(specialists.keys())]
+    buttons = list(sorted(specialists.keys()))
+    keyboard = [buttons[i:i+2] for i in range(0, len(buttons), 2)]  # две кнопки в строку
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     await update.message.reply_text("🌟 Выбери Советника для общения: 🌟", reply_markup=reply_markup)
 
