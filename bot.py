@@ -6,22 +6,15 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Con
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
 
-# 🔑 Ключи из среды
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# 🧐 Клиент OpenAI
 client = OpenAI(api_key=OPENAI_API_KEY)
-
-# 🔧 Логгирование
 logging.basicConfig(level=logging.INFO)
 
-# 👥 Состояние пользователя
 user_specialists = {}
 user_first_intro_shown = {}
 specialists_data = {}
-
-# 📚 Загрузка конфигураций советников
 ADVISORS_PATH = "advisors"
 
 def load_specialists():
@@ -32,25 +25,22 @@ def load_specialists():
                 data = json.load(f)
                 specialists_data[data["name"]] = data
 
-# 📅 /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_specialists.pop(update.effective_user.id, None)
     user_first_intro_shown.pop(update.effective_user.id, None)
-    keyboard = [[KeyboardButton(name)] for name in specialists_data.keys()]
+    keyboard = [[KeyboardButton(name)] for name in sorted(specialists_data.keys())]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    await update.message.reply_text("Выбери Советника для общения:", reply_markup=reply_markup)
+    await update.message.reply_text("\U0001F31F Выбери Советника для общения: \U0001F31F", reply_markup=reply_markup)
 
-# 📍 /info
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in user_specialists:
         specialist_name = user_specialists[user_id]
         intro = specialists_data[specialist_name].get("short_intro", "")
-        await update.message.reply_text(f"🛏️\n✨ *{specialist_name}* ✨\n\n{intro}", parse_mode="Markdown")
+        await update.message.reply_text(f"\U0001F6CF\n\u2728 *{specialist_name}* \u2728\n\n{intro}", parse_mode="Markdown")
     else:
-        await update.message.reply_text("❌ Пока Советник не выбран. Введи /start и выбери Советника.")
+        await update.message.reply_text("\u274C Пока Советник не выбран. Введи /start и выбери Советника.")
 
-# 💬 Обработка текста
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_message = update.message.text.strip()
@@ -60,18 +50,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user_id not in user_first_intro_shown:
             user_first_intro_shown[user_id] = True
             intro = specialists_data[user_message].get("short_intro", "")
-            await update.message.reply_text(f"🛏️\n✨ *{user_message}* ✨\n\n{intro}", parse_mode="Markdown")
-        await update.message.reply_text(f"👋 Теперь ты общаешься с Советником: *{user_message}*", parse_mode="Markdown")
+            await update.message.reply_text(f"\U0001F6CF\n\u2728 *{user_message}* \u2728\n\n{intro}", parse_mode="Markdown")
+        await update.message.reply_text(f"\U0001F44B Теперь ты общаешься с Советником: *{user_message}*", parse_mode="Markdown")
         return
 
     if user_id not in user_specialists:
-        await update.message.reply_text("🚷 Сначала выбери Советника через /start 🚷")
+        await update.message.reply_text("\U0001F6B7 Сначала выбери Советника через /start \U0001F6B7")
         return
 
     specialist_name = user_specialists[user_id]
     system_prompt = specialists_data[specialist_name].get("system_prompt", "")
 
-    await update.message.reply_text("🔄 Обрабатываю запрос...")
+    await update.message.reply_text("\U0001F504 Обрабатываю запрос...")
 
     try:
         messages: list[ChatCompletionMessageParam] = [
@@ -87,10 +77,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(reply)
 
     except Exception as e:
-        logging.error(f"❌ Ошибка OpenAI: {e}")
-        await update.message.reply_text("⚠️ Ошибка при общении с ИИ. Попробуй позже или проверь API-ключ.")
-
-# ▶️ Запуск
+        logging.error(f"\u274C Ошибка OpenAI: {e}")
+        await update.message.reply_text("\u26A0\ufe0f Ошибка при обращении к ИИ. Попробуй позже или проверь API-ключ.")
 
 def main():
     load_specialists()
@@ -98,7 +86,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("info", info))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    logging.info("🚀 Бот запущен и ожидает команд...")
+    logging.info("\U0001F680 Бот запущен и ожидает команд...")
     app.run_polling()
 
 if __name__ == "__main__":
