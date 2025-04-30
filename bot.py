@@ -1,6 +1,7 @@
 
 import json
 import os
+import openai
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
