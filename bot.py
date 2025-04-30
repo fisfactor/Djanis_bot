@@ -1,12 +1,13 @@
 
 import json
 import os
-import openai
+from openai import OpenAI
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI()
 
 # Храним активных Советников по chat_id
 active_specialists = {}
@@ -75,17 +76,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ Возникла ошибка с загрузкой Советника.")
             return
 
-        system_prompt = specialist["system_prompt"]
+        from openai import OpenAI
 
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text}
-            ]
+        client = OpenAI()
+
+        response = client.chat.completions.create(
+           model="gpt-3.5-turbo",
+           messages=[
+              {"role": "system", "content": system_prompt},
+              {"role": "user", "content": text}
+          ]
         )
 
-        reply = response.choices[0].message["content"]
+        reply = response.choices[0].message.content
+
         await update.message.reply_text(reply)
 
     else:
