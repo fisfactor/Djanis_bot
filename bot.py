@@ -31,7 +31,7 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current = user_states.get(user_id)
     if current and current in specialists:
         welcome = specialists[current].get("welcome", "Нет информации.")
-        await update.message.reply_text(f"📜 Приветствие Советника {current}:
+        await update.message.reply_text(f"📜 Приветствие Советника {current}":
 
 {welcome}")
     else:
