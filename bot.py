@@ -1,94 +1,65 @@
-import os
+
 import json
-import logging
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+import os
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
-from openai import OpenAI
-from openai.types.chat import ChatCompletionMessageParam
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# Путь к директории с конфигурациями
+ADVISORS_PATH = "./advisors"
 
-client = OpenAI(api_key=OPENAI_API_KEY)
-logging.basicConfig(level=logging.INFO)
-
-user_specialists = {}
-specialists_data = {}
-ADVISORS_PATH = "advisors"
-
-# Загрузка советников из JSON-файлов
-
+# Загружаем конфигурации всех Советников
 def load_specialists():
-    global specialists_data
+    specialists = {}
     for filename in os.listdir(ADVISORS_PATH):
         if filename.endswith(".json"):
             with open(os.path.join(ADVISORS_PATH, filename), "r", encoding="utf-8") as f:
                 data = json.load(f)
-                specialists_data[data["name"]] = data
+                key = data.get("name", "").upper()
+                specialists[key] = data
+    return specialists
 
-# /start
+specialists = load_specialists()
+user_states = {}
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[KeyboardButton(name)] for name in sorted(specialists_data.keys())]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    await update.message.reply_text("\U0001F31F Выбери Советника для общения: \U0001F31F", reply_markup=reply_markup)
+    keyboard = [[s] for s in sorted(specialists.keys())]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    await update.message.reply_text("🌟 Выбери Советника для общения: 🌟", reply_markup=reply_markup)
 
-# /info
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id in user_specialists:
-        specialist_name = user_specialists[user_id]
-        intro = specialists_data[specialist_name].get("short_intro", "")
-        await update.message.reply_text(f"\U0001F6CF\n\u2728 *{specialist_name}* \u2728\n\n{intro}", parse_mode="Markdown")
+    user_id = update.message.chat_id
+    current = user_states.get(user_id)
+    if current and current in specialists:
+        welcome = specialists[current].get("welcome", "Нет информации.")
+        await update.message.reply_text(f"📜 Приветствие Советника {current}:
+
+{welcome}")
     else:
-        await update.message.reply_text("\u274C Пока Советник не выбран. Введи /start и выбери Советника.")
+        await update.message.reply_text("⚠️ Сначала выбери Советника через команду /start.")
 
-# Обработка текстовых сообщений
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    user_message = update.message.text.strip()
+    user_id = update.message.chat_id
+    text = update.message.text.upper()
 
-    if user_message in specialists_data:
-        user_specialists[user_id] = user_message
-        intro = specialists_data[user_message].get("short_intro", "")
-        await update.message.reply_text(f"\U0001F6CF\n\u2728 *{user_message}* \u2728\n\n{intro}", parse_mode="Markdown")
-        await update.message.reply_text(f"\U0001F44B Теперь ты общаешься с Советником: *{user_message}*", parse_mode="Markdown")
-        return
+    if text in specialists:
+        previous = user_states.get(user_id)
+        user_states[user_id] = text
 
-    if user_id not in user_specialists:
-        await update.message.reply_text("\U0001F6B7 Сначала выбери Советника через /start \U0001F6B7")
-        return
+        if text != previous:
+            welcome = specialists[text].get("welcome", "Рад встрече!")
+            await update.message.reply_text(f"📜 {welcome}")
 
-    specialist_name = user_specialists[user_id]
-    system_prompt = specialists_data[specialist_name].get("system_prompt", "")
-
-    await update.message.reply_text("\U0001F504 Обрабатываю запрос...")
-
-    try:
-        messages: list[ChatCompletionMessageParam] = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message}
-        ]
-
-        response = client.chat.completions.create(
-            model="gpt-4.1-mini",
-            messages=messages
-        )
-        reply = response.choices[0].message.content
-        await update.message.reply_text(reply)
-
-    except Exception as e:
-        logging.error(f"\u274C Ошибка OpenAI: {e}")
-        await update.message.reply_text("\u26A0\ufe0f Ошибка при обращении к ИИ. Попробуй позже или проверь API-ключ.")
-
-# Запуск
+        await update.message.reply_text(f"👋 Теперь ты общаешься с Советником: {text}")
+    else:
+        await update.message.reply_text("❓ Неизвестный Советник. Пожалуйста, выбери из списка через /start.")
 
 def main():
-    load_specialists()
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    app = ApplicationBuilder().token("YOUR_TELEGRAM_BOT_TOKEN").build()
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("info", info))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    logging.info("\U0001F680 Бот запущен и ожидает команд...")
+
     app.run_polling()
 
 if __name__ == "__main__":
