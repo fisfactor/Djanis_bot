@@ -6,6 +6,8 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
 # Храним активных Советников по chat_id
 active_specialists = {}
 
