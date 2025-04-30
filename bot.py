@@ -53,9 +53,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❓ Неизвестный Советник. Пожалуйста, выбери из списка через /start.")
 
 def main():
-    import os
-
-app = ApplicationBuilder().token(os.environ["TELEGRAM_TOKEN"]).build()
+    app = ApplicationBuilder().token("YOUR_TELEGRAM_BOT_TOKEN").build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("info", info))
