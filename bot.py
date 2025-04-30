@@ -13,9 +13,10 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 logging.basicConfig(level=logging.INFO)
 
 user_specialists = {}
-user_first_intro_shown = {}
 specialists_data = {}
 ADVISORS_PATH = "advisors"
+
+# Загрузка советников из JSON-файлов
 
 def load_specialists():
     global specialists_data
@@ -25,13 +26,13 @@ def load_specialists():
                 data = json.load(f)
                 specialists_data[data["name"]] = data
 
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_specialists.pop(update.effective_user.id, None)
-    user_first_intro_shown.pop(update.effective_user.id, None)
     keyboard = [[KeyboardButton(name)] for name in sorted(specialists_data.keys())]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text("\U0001F31F Выбери Советника для общения: \U0001F31F", reply_markup=reply_markup)
 
+# /info
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in user_specialists:
@@ -41,16 +42,15 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("\u274C Пока Советник не выбран. Введи /start и выбери Советника.")
 
+# Обработка текстовых сообщений
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_message = update.message.text.strip()
 
     if user_message in specialists_data:
         user_specialists[user_id] = user_message
-        if user_id not in user_first_intro_shown:
-            user_first_intro_shown[user_id] = True
-            intro = specialists_data[user_message].get("short_intro", "")
-            await update.message.reply_text(f"\U0001F6CF\n\u2728 *{user_message}* \u2728\n\n{intro}", parse_mode="Markdown")
+        intro = specialists_data[user_message].get("short_intro", "")
+        await update.message.reply_text(f"\U0001F6CF\n\u2728 *{user_message}* \u2728\n\n{intro}", parse_mode="Markdown")
         await update.message.reply_text(f"\U0001F44B Теперь ты общаешься с Советником: *{user_message}*", parse_mode="Markdown")
         return
 
@@ -79,6 +79,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"\u274C Ошибка OpenAI: {e}")
         await update.message.reply_text("\u26A0\ufe0f Ошибка при обращении к ИИ. Попробуй позже или проверь API-ключ.")
+
+# Запуск
 
 def main():
     load_specialists()
