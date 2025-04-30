@@ -48,13 +48,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         active_specialists[chat_id] = text  # Сохраняем выбор Советника
         specialist = specialists[text]
         if not specialist.get("shown", False):
-            await update.message.reply_text(specialist["greeting"], parse_mode=ParseMode.HTML)
+            await update.message.reply_text(specialist.get("welcome", "⚠️ Приветствие не найдено."), parse_mode=ParseMode.HTML)
             specialist["shown"] = True
         await update.message.reply_text(f"👋 Теперь ты общаешься с Советником: <b>{text}</b>", parse_mode=ParseMode.HTML)
     elif text == "/INFO":
         current = active_specialists.get(chat_id)
         if current and current in specialists:
-            await update.message.reply_text(specialists[current]["greeting"], parse_mode=ParseMode.HTML)
+            await update.message.reply_text(specialists[current].get("welcome", "⚠️ Приветствие не найдено."), parse_mode=ParseMode.HTML)
         else:
             await update.message.reply_text("❓ Сначала выбери Советника через /start.")
     elif chat_id in active_specialists:
