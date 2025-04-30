@@ -1,7 +1,7 @@
 
 import json
 import os
-from openai 
+import openai 
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
@@ -74,10 +74,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not specialist:
             await update.message.reply_text("⚠️ Возникла ошибка с загрузкой Советника.")
             return
-
-        from openai import OpenAI
-
-        client = OpenAI()
 
         response = openai.ChatCompletion.create(
            model="gpt-3.5-turbo",
