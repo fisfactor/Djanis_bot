@@ -75,6 +75,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ Возникла ошибка с загрузкой Советника.")
             return
 
+        system_prompt = specialist.get("system_prompt", "Ты — мудрый Советник. Отвечай понятно и с заботой.")
+
         response = openai.ChatCompletion.create(
            model="gpt-3.5-turbo",
            messages=[
