@@ -1,107 +1,132 @@
-
-import json
 import os
-import openai 
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.constants import ParseMode
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+import json
+import logging
+import openai
+from telegram import Update, ParseMode
+from telegram.ext import (
+    ApplicationBuilder,
+    ContextTypes,
+    CommandHandler,
+    MessageHandler,
+    filters,
+)
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Путь к папке с JSON-файлами Советников
+BASE_DIR = os.path.dirname(__file__)
+ADVISORS_PATH = os.path.join(BASE_DIR, "advisors")
 
-# Храним активных Советников по chat_id
-active_specialists = {}
+# Загрузка всех Советников из JSON
+specialists = {}
+for filename in os.listdir(ADVISORS_PATH):
+    if filename.endswith('.json'):
+        filepath = os.path.join(ADVISORS_PATH, filename)
+        with open(filepath, encoding='utf-8') as f:
+            data = json.load(f)
+            # ожидание, что в файле есть поле "name"
+            specialists[data['name']] = data
 
-# Путь к директории с конфигурациями
-ADVISORS_PATH = "./advisors"
-
-# Загружаем конфигурации всех Советников
-def load_specialists():
-    specialists = {}
-    for filename in os.listdir(ADVISORS_PATH):
-        if filename.endswith(".json"):
-            with open(os.path.join(ADVISORS_PATH, filename), "r", encoding="utf-8") as f:
-                data = json.load(f)
-                key = data.get("name", "").upper()
-                specialists[key] = data
-    return specialists
-
-specialists = load_specialists()
-user_states = {}
+# Словарь для хранения выбранного Советника на каждый чат
+active_specialists: dict[int, str] = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    buttons = list(sorted(specialists.keys()))
-    keyboard = [buttons[i:i+2] for i in range(0, len(buttons), 2)]  # две кнопки в строку
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-    await update.message.reply_text("🌟 Выбери Советника для общения: 🌟", reply_markup=reply_markup)
-
-async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.chat_id
-    current = user_states.get(user_id)
-    if current and current in specialists:
-        welcome = specialists[current].get("welcome", "Нет информации.")
-        await update.message.reply_text(f"📜 Приветствие Советника {current}:\n\n{welcome}")
-
-    else:
-        await update.message.reply_text("⚠️ Сначала выбери Советника через команду /start.")
+    """
+    Стартовое сообщение - выводим список доступных Советников
+    """
+    names = '\n'.join(f"- {name}" for name in specialists.keys())
+    text = "👋 Выбери Советника для общения:\n" + names
+    await update.message.reply_text(text)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.message.chat_id
-    text = update.message.text.strip().upper()
+    """
+    Обработка входящих текстовых сообщений
+    """
+    text = update.message.text.strip()
+    chat_id = update.effective_chat.id
 
+    # 1) Выбор Советника
     if text in specialists:
-        active_specialists[chat_id] = text  # Сохраняем выбор Советника
-        user_states[chat_id] = {"advisor": text, "greeted": False}
+        active_specialists[chat_id] = text
+        await update.message.reply_text(
+            f"👋 Теперь ты общаешься с Советником: <b>{text}</b>",
+            parse_mode=ParseMode.HTML
+        )
+        return
 
-        specialist = specialists[text]
+    # 2) Дополнительная команда /INFO
+    elif text.upper() == "/INFO":
+        info = (
+            "ℹ️ Список команд:\n"
+            "- Напиши имя Советника для начала диалога\n"
+            "- /INFO — показать это сообщение\n"
+            "- Другие сообщения будут пересылаться выбранному Советнику"
+        )
+        await update.message.reply_text(info)
+        return
 
-        if not user_states[chat_id]["greeted"]:
-            await update.message.reply_text(specialist.get("welcome", "⚠️ Приветствие не найдено."), parse_mode=ParseMode.HTML)
-            user_states[chat_id]["greeted"] = True
-
-        await update.message.reply_text(f"👋 Теперь ты общаешься с Советником: <b>{text}</b>", parse_mode=ParseMode.HTML)
-
-    elif text == "/INFO":
-        current = active_specialists.get(chat_id)
-        if current and current in specialists:
-            await update.message.reply_text(specialists[current].get("welcome", "⚠️ Приветствие не найдено."), parse_mode=ParseMode.HTML)
-        else:
-            await update.message.reply_text("❓ Сначала выбери Советника через /start.")
-
+    # 3) Работа с выбранным Советником
     elif chat_id in active_specialists:
-        current = active_specialists[chat_id]
-        specialist = specialists.get(current)
-
+        user_text = text
+        current_name = active_specialists[chat_id]
+        specialist = specialists.get(current_name)
         if not specialist:
-            await update.message.reply_text("⚠️ Возникла ошибка с загрузкой Советника.")
+            await update.message.reply_text("⚠️ Ошибка: Советник не найден.")
             return
 
-        system_prompt = specialist.get("system_prompt", "Ты — мудрый Советник. Отвечай понятно и с заботой.")
+        # Получаем системную подсказку для OpenAI
+        system_prompt = specialist.get('system_prompt', '')
 
-        response = openai.ChatCompletion.create(
-           model="gpt-3.5-turbo",
-           messages=[
-              {"role": "system", "content": system_prompt},
-              {"role": "user", "content": text}
-          ]
-        )
+        # Устанавливаем API-ключ OpenAI из переменных окружения
+        openai.api_key = os.getenv('OPENAI_API_KEY')
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-4o",  # или "gpt-4o-mini"
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user",   "content": user_text}
+                ]
+            )
+            reply = response.choices[0].message.content
+            await update.message.reply_text(reply)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка при запросе к OpenAI: {e}")
+        return
 
-        reply = response.choices[0].message.content
-
-        await update.message.reply_text(reply)
-
+    # 4) Неизвестная команда
     else:
-        await update.message.reply_text("❓ Неизвестный Советник. Пожалуйста, выбери из списка через /start.")
+        await update.message.reply_text(
+            "⚠️ Неизвестная команда. Напиши /start для начала."
+        )
+        return
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Логирование ошибок, чтобы не получать "No error handlers are registered"
+    """
+    logging.error(f"Update {update} caused error {context.error}")
 
 
 def main():
-    app = ApplicationBuilder().token(os.environ["TELEGRAM_TOKEN"]).build()
+    # Настройка логирования
+    logging.basicConfig(level=logging.INFO)
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("info", info))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    # Токен Telegram-бота
+    token = os.getenv('TELEGRAM_TOKEN')
 
-    app.run_polling()
+    # Создаем приложение
+    application = ApplicationBuilder().token(token).build()
+
+    # Регистрируем обработчики
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
+    )
+
+    # Обработчик ошибок
+    application.add_error_handler(error_handler)
+
+    # Старт бота
+    application.run_polling()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
