@@ -2,7 +2,8 @@ import os
 import json
 import logging
 import openai
-from telegram import Update, ParseMode
+from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
@@ -22,7 +23,7 @@ for filename in os.listdir(ADVISORS_PATH):
         filepath = os.path.join(ADVISORS_PATH, filename)
         with open(filepath, encoding='utf-8') as f:
             data = json.load(f)
-            # ожидание, что в файле есть поле "name"
+            # Ожидаем, что в файле есть поле "name"
             specialists[data['name']] = data
 
 # Словарь для хранения выбранного Советника на каждый чат
@@ -30,7 +31,7 @@ active_specialists: dict[int, str] = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Стартовое сообщение - выводим список доступных Советников
+    Стартовое сообщение — выводим список доступных Советников
     """
     names = '\n'.join(f"- {name}" for name in specialists.keys())
     text = "👋 Выбери Советника для общения:\n" + names
@@ -130,3 +131,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
