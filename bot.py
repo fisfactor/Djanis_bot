@@ -97,14 +97,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         base_prompt = specialist.get('system_prompt', '')
         # Получаем системную подсказку и добавляем инструкцию по форматированию
-base_prompt = specialist.get('system_prompt', '')
-format_instr = (
-    "
+        # Получаем базовую системную подсказку из JSON и добавляем инструкцию по оформлению
+        base_prompt = specialist.get('system_prompt', '')
+        format_instr = (
+            "\n\nПожалуйста, форматируй ответ, используя эмодзи, отступы и "
+            "маркированные списки для лучшей читаемости."
+        )
+        system_prompt = base_prompt + format_instr
 
-Пожалуйста, форматируй ответ, используя эмодзи, отступы и "
-    "маркированные списки для лучшей читаемости."
-)
-system_prompt = base_prompt + format_instr
         try:
             response = openai_client.chat.completions.create(
                 model="gpt-4o",
