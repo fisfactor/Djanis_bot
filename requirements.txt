@@ -1,4 +1,4 @@
 openai
 python-telegram-bot
-
-
+SQLAlchemy>=1.4
+python-dotenv>=0.21
