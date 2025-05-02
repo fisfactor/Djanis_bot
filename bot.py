@@ -85,6 +85,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👋 Теперь ты общаешься с Советником: <b>{text}</b>",
             parse_mode=ParseMode.HTML
         )
+        # Дополнительное индивидуальное сообщение из JSON (если есть)
+        specialist = specialists[text]
+        welcome_msg = specialist.get('welcome')
+        if welcome_msg:
+            await update.message.reply_text(welcome_msg)
         return
 
     # Если Советник выбран, отправляем запрос в OpenAI
