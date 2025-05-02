@@ -1,8 +1,8 @@
 import os
 import json
 import logging
-import openai
-from telegram import Update
+from openai import OpenAI
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import (
     ApplicationBuilder,
@@ -11,6 +11,9 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
 
 # Путь к папке с JSON-файлами Советников
 BASE_DIR = os.path.dirname(__file__)
@@ -23,19 +26,35 @@ for filename in os.listdir(ADVISORS_PATH):
         filepath = os.path.join(ADVISORS_PATH, filename)
         with open(filepath, encoding='utf-8') as f:
             data = json.load(f)
-            # Ожидаем, что в файле есть поле "name"
             specialists[data['name']] = data
 
 # Словарь для хранения выбранного Советника на каждый чат
 active_specialists: dict[int, str] = {}
 
+# Инициализируем клиент OpenAI
+openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Стартовое сообщение — выводим список доступных Советников
+    Стартовое сообщение — выводим список доступных Советников кнопками
     """
-    names = '\n'.join(f"- {name}" for name in specialists.keys())
-    text = "👋 Выбери Советника для общения:\n" + names
-    await update.message.reply_text(text)
+    names = list(specialists.keys())
+    # Формируем клавиатуру по 3 кнопки в ряд
+    keyboard = []
+    row = []
+    for name in names:
+        row.append(name)
+        if len(row) >= 3:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+
+    markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    await update.message.reply_text(
+        "👋 Выберите Советника для общения:",
+        reply_markup=markup
+    )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -44,7 +63,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     chat_id = update.effective_chat.id
 
-    # 1) Выбор Советника
+    # Выбор Советника
     if text in specialists:
         active_specialists[chat_id] = text
         await update.message.reply_text(
@@ -53,38 +72,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 2) Дополнительная команда /INFO
-    elif text.upper() == "/INFO":
-        info = (
-            "ℹ️ Список команд:\n"
-            "- Напиши имя Советника для начала диалога\n"
-            "- /INFO — показать это сообщение\n"
-            "- Другие сообщения будут пересылаться выбранному Советнику"
-        )
-        await update.message.reply_text(info)
-        return
-
-    # 3) Работа с выбранным Советником
-    elif chat_id in active_specialists:
-        user_text = text
+    # Если Советник выбран, перенаправляем сообщение в OpenAI
+    if chat_id in active_specialists:
         current_name = active_specialists[chat_id]
         specialist = specialists.get(current_name)
         if not specialist:
             await update.message.reply_text("⚠️ Ошибка: Советник не найден.")
             return
 
-        # Получаем системную подсказку для OpenAI
         system_prompt = specialist.get('system_prompt', '')
-
-        # Устанавливаем API-ключ OpenAI из переменных окружения
-        openai.api_key = os.getenv('OPENAI_API_KEY')
+        user_text = text
         try:
-            response = openai.ChatCompletion.create(
+            response = openai_client.chat.completions.create(
                 model="gpt-4o",  # или "gpt-4o-mini"
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user",   "content": user_text}
-                ]
+                ],
             )
             reply = response.choices[0].message.content
             await update.message.reply_text(reply)
@@ -92,40 +96,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Ошибка при запросе к OpenAI: {e}")
         return
 
-    # 4) Неизвестная команда
-    else:
-        await update.message.reply_text(
-            "⚠️ Неизвестная команда. Напиши /start для начала."
-        )
-        return
+    # Если Советник не выбран
+    await update.message.reply_text(
+        "⚠️ Сначала выберите Советника командой /start"
+    )
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Логирование ошибок, чтобы не получать "No error handlers are registered"
-    """
     logging.error(f"Update {update} caused error {context.error}")
 
 
 def main():
-    # Настройка логирования
-    logging.basicConfig(level=logging.INFO)
-
-    # Токен Telegram-бота
     token = os.getenv('TELEGRAM_TOKEN')
-
-    # Создаем приложение
     application = ApplicationBuilder().token(token).build()
 
-    # Регистрируем обработчики
     application.add_handler(CommandHandler("start", start))
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
     )
-
-    # Обработчик ошибок
     application.add_error_handler(error_handler)
 
-    # Старт бота
+    # Запуск polling
     application.run_polling()
 
 
