@@ -17,7 +17,9 @@ Base = declarative_base()
 
 class User(Base):
     __tablename__ = 'users'
-    user_id  = Column(BigInteger, primary_key=True, index=True)
-    first_ts = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
-    count    = Column(Integer, default=0, nullable=False)
-    blocked  = Column(Boolean, default=False, nullable=False)
+    id = Column(BigInteger, primary_key=True, index=True)
+    user_id = Column(BigInteger, unique=True, nullable=False)
+    usage_count = Column(Integer, default=0, nullable=False)
+    is_admin = Column(Boolean, default=False)
+    last_request = Column(DateTime, default=datetime.utcnow)
+
