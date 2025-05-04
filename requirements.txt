@@ -1,4 +1,4 @@
 openai
-python-telegram-bot
+python-telegram-bot[webhooks]
 SQLAlchemy>=1.4
 python-dotenv>=0.21

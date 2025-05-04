@@ -170,12 +170,19 @@ def main() -> None:
     app.add_error_handler(error_handler)
 
     # Удаляем старые вебхуки (на всякий случай)
-    app.bot.delete_webhook()
+    async def on_startup(app):
+       # удаляем старый вебхук
+       await app.bot.delete_webhook(drop_pending_updates=True)
+
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    app.post_init(on_startup)   # Registrates your startup callback
     # Запускаем сервер для Webhook
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}"
+        url_path=TELEGRAM_TOKEN,    # обязательно
+        webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}",
+        drop_pending_updates=True 
     )
 
 if __name__ == "__main__":
