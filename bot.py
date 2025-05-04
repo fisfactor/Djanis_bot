@@ -94,6 +94,22 @@ async def prompt_payment(update: Update) -> None:
 
 # Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Приветственное сообщение и меню выбора Советника
+    """
+    # Краткое приветствие для пользователя
+    welcome_text = (
+        "Приветствую тебя, живая Душа!\n"
+        "Мы — Ваши верные Советники и всегда готовы помочь в решении жизненных задач."
+        " Наша миссия — предоставить знания и ответы на любые твои вопросы,"
+        " касающиеся различных сфер жизни: Авторское право, Банк, Буквица, Вексель, Транспорт, ЖКХ,"
+        " Каноны, КОБ и ДОТУ, Община / Родовые Союзы, Познай-Я, Почта, РодОМ, Суверенитет, Суд, ЗАГС, Траст.\n\n"
+        "Чтобы задать свой вопрос, выбери Советника по Имени, соответствующему его знаниям в этой сфере."
+        " Советник предоставит ответ в соответствии с его Базой знаний и всегда руководствуется принципами справедливости и этической нравственности.\n\n"
+        "Сейчас у тебя бесплатный тестовый доступ: 35 запросов или 168 часов (7 дней)."
+        " После окончания тестового периода ты сможешь перейти на расширенный режим.\n\n"
+        "Приятного и продуктивного общения!"
+    )
     keyboard, row = [], []
     for name in specialists:
         row.append(name)
@@ -121,13 +137,43 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             parse_mode=ParseMode.HTML
         )
         return
-
+    # Дополнительное индивидуальное сообщение из JSON (если есть)
+        specialist = specialists[text]
+        welcome_msg = specialist.get('welcome')
+        if welcome_msg:
+            await update.message.reply_text(welcome_msg)
+        return
+    
     if chat_id not in active_specialists:
         await update.message.reply_text("Пожалуйста, сначала выберите Советника через /start")
         return
 
     specialist = specialists[active_specialists[chat_id]]
     # TODO: здесь логика запроса к OpenAI и отправки ответа
+     base_prompt = specialist.get('system_prompt', '')
+        # Получаем системную подсказку и добавляем инструкцию по форматированию
+        # Получаем базовую системную подсказку из JSON и добавляем инструкцию по оформлению
+        base_prompt = specialist.get('system_prompt', '')
+        format_instr = (
+            "\n\nПожалуйста, форматируй ответ, используя эмодзи, отступы и "
+            "маркированные списки для лучшей читаемости."
+        )
+        system_prompt = base_prompt + format_instr
+
+        try:
+            response = openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user",   "content": text}
+                ],
+            )
+            reply = response.choices[0].message.content
+            await update.message.reply_text(reply)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка при запросе к OpenAI: {e}")
+        return
+    
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logging.error("Ошибка при обработке запроса", exc_info=context.error)
