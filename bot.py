@@ -14,9 +14,7 @@ from telegram.ext import (
     filters,
 )
 
-from sqlalchemy import create_engine, Column, BigInteger, Integer, Boolean, DateTime
-from sqlalchemy.orm import declarative_base, sessionmaker
-from models import Base, User, engine, SessionLocal
+from models import User, SessionLocal
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -33,16 +31,6 @@ ADMIN_IDS = {825403443}
 
 # Инициализация OpenAI
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
-
-# Настройка базы данных SQLAlchemy
-Base = declarative_base()
-if DATABASE_URL.startswith("sqlite"):
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-else:
-    engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base.metadata.create_all(bind=engine)
 
 # Загрузка конфигураций советников из папки advisors
 BASE_DIR = os.path.dirname(__file__)
@@ -64,7 +52,7 @@ def check_and_update_usage(user_id: int) -> bool:
         return True
     now = datetime.utcnow()
     db = SessionLocal()
-    user = db.get(User, user_id)
+    user = db.query(User).filter_by(user_id=user_id).first()
     if not user:
         user = User(user_id=user_id, usage_count=1, last_request=now)
         db.add(user)

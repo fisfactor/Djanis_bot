@@ -1,6 +1,6 @@
-openai
-python-telegram-bot[webhooks]
-SQLAlchemy>=1.4
-python-dotenv>=0.21
+python-telegram-bot[webhooks]>=20.0
+openai>=0.27.0
+sqlalchemy>=2.0
 psycopg2-binary>=2.9
+
 
