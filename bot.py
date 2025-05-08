@@ -16,6 +16,7 @@ from telegram.ext import (
 
 from sqlalchemy import create_engine, Column, BigInteger, Integer, Boolean, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker
+from models import Base, User, engine, SessionLocal
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -35,16 +36,11 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Настройка базы данных SQLAlchemy
 Base = declarative_base()
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-class User(Base):
-    __tablename__ = 'users'
-    id = Column(BigInteger, primary_key=True, index=True)
-    user_id = Column(BigInteger, unique=True, nullable=False)
-    usage_count = Column(Integer, default=0, nullable=False)
-    is_admin = Column(Boolean, default=False)
-    last_request = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
 
