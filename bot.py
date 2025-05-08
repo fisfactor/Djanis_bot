@@ -23,9 +23,9 @@ logging.basicConfig(level=logging.INFO)
 # Переменные окружения
 TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
 OPENAI_API_KEY = os.environ['OPENAI_API_KEY']
-DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///usage.db')
-WEBHOOK_URL = os.environ['WEBHOOK_URL']  # Например: https://djanis-bot.onrender.com
-PORT = int(os.environ.get('PORT', '8443'))
+DATABASE_URL    = os.environ['DATABASE_URL']      # например postgres://render:…@10.0.x.y:5432/djanis_db
+WEBHOOK_URL     = os.environ['WEBHOOK_URL']       # например https://djanis-bot.onrender.com
+PORT            = int(os.environ.get('PORT', 8443))
 
 # Администрирование (ID с безлимитным доступом)
 ADMIN_IDS = {825403443}
