@@ -2,7 +2,7 @@
 
 import os
 from datetime import datetime
-from sqlalchemy import create_engine, Column, BigInteger, Integer, Boolean, DateTime   
+from sqlalchemy import create_engine, Column, BigInteger, Integer, Boolean, DateTime, String   
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 DATABASE_URL = os.environ['DATABASE_URL']
@@ -19,3 +19,4 @@ class User(Base):
     is_admin     = Column(Boolean, default=False, nullable=False)
     first_request  = Column(DateTime,  default=datetime.utcnow, nullable=False)
     last_request = Column(DateTime, default=datetime.utcnow, nullable=False)
+    gender = Column(String, nullable=True)
