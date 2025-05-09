@@ -123,12 +123,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     chat_id = update.effective_chat.id
     text = update.message.text.strip()
 
-    # Проверка лимитов
-    if not check_and_update_usage(user_id):
-        await prompt_payment(update)
-        return
-
-    # Выбор советника
+    # Смена Советника — не считаем за запрос
     if text in specialists:
         active_specialists[chat_id] = text
         await update.message.reply_text(
@@ -139,6 +134,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         welcome_msg = specialists[text].get('welcome')
         if welcome_msg:
             await update.message.reply_text(welcome_msg)
+        return
+
+    # Проверка лимитов
+    if not check_and_update_usage(user_id):
+        await prompt_payment(update)
         return
 
     # Если советник не выбран
