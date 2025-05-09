@@ -22,8 +22,8 @@ logging.basicConfig(level=logging.INFO)
 # Переменные окружения
 TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
 OPENAI_API_KEY = os.environ['OPENAI_API_KEY']
-DATABASE_URL    = os.environ['DATABASE_URL']      # например postgres://render:…@10.0.x.y:5432/djanis_db
-WEBHOOK_URL     = os.environ['WEBHOOK_URL']       # например https://djanis-bot.onrender.com
+DATABASE_URL    = os.environ['DATABASE_URL']      
+WEBHOOK_URL     = os.environ['WEBHOOK_URL']       
 PORT            = int(os.environ.get('PORT', 8443))
 
 # Администрирование (ID с безлимитным доступом)
@@ -48,21 +48,35 @@ active_specialists: dict[int, str] = {}
 # Лимиты и оплата
 
 def check_and_update_usage(user_id: int) -> bool:
-    if user_id in ADMIN_IDS:
-        return True
     now = datetime.utcnow()
-    db = SessionLocal()
+    db  = SessionLocal()
     user = db.query(User).filter_by(user_id=user_id).first()
+
     if not user:
-        user = User(user_id=user_id, usage_count=1, last_request=now)
+        # записываем оба поля одинаково при первом обращении
+        user = User(
+            user_id=user_id,
+            usage_count=1,
+            first_request=now,
+            last_request=now,
+            is_admin=(user_id in ADMIN_IDS)
+        )
         db.add(user)
         db.commit()
+        db.close()
+        return True
+
+    # уже есть запись
+    # админам не считаем лимиты
+    if user.is_admin:
         db.close()
         return True
     # Сброс после 7 дней или ограничение 35 запросов
     if user.usage_count >= 35 or (now - user.last_request) >= timedelta(hours=168):
         db.close()
         return False
+
+    
     user.usage_count += 1
     user.last_request = now
     db.commit()
@@ -160,7 +174,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         max_requests = 35
         max_hours    = 168
         left_requests = max_requests - (user.usage_count if user else 0)
-        elapsed       = datetime.utcnow() - (user.last_request if user else datetime.utcnow())
+        elapsed       = datetime.utcnow() - (user.first_request if user else datetime.utcnow())
         left_hours    = max_hours - (elapsed.total_seconds() / 3600)
 
         footer = (

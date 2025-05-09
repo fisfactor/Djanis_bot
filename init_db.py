@@ -2,8 +2,12 @@
 
 from models import Base, engine
 
-# Создаст таблицы, если их ещё нет:
+
+# Удаляем старую схему (если есть)
+Base.metadata.drop_all(bind=engine)
+
+# Создаём заново
 Base.metadata.create_all(bind=engine)
-print("База данных и таблицы созданы/проверены.")
+print("✅ База и таблицы пересозданы.")
 
 
