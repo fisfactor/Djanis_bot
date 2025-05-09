@@ -150,7 +150,29 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             ],
         )
         reply = response.choices[0].message.content
-        await update.message.reply_text(reply, parse_mode=ParseMode.HTML)
+        # —————— НОВЫЙ БЛОК: считаем остаток лимита ——————
+        # достаём текущего пользователя
+        db = SessionLocal()
+        user = db.query(User).filter_by(user_id=user_id).first()
+        db.close()
+
+        # считаем, сколько осталось запросов и часов
+        max_requests = 35
+        max_hours    = 168
+        left_requests = max_requests - (user.usage_count if user else 0)
+        elapsed       = datetime.utcnow() - (user.last_request if user else datetime.utcnow())
+        left_hours    = max_hours - (elapsed.total_seconds() / 3600)
+
+        footer = (
+            f"\n\n🔎 Осталось запросов: {left_requests}  "
+            f"⏳ Осталось времени: {left_hours:.1f} ч"
+        )
+
+        # отправляем ответ + footer
+        await update.message.reply_text(
+            reply + footer,
+            parse_mode=ParseMode.HTML
+        )
     except Exception as e:
         await update.message.reply_text(f'❌ Ошибка при запросе к OpenAI: {e}')
 
