@@ -2,9 +2,12 @@ import os
 import json
 import logging
 from datetime import datetime, timedelta
-
+# импорт для расчёта срока
+from dateutil.relativedelta import relativedelta
 from openai import OpenAI
 from telegram import Update, ReplyKeyboardMarkup
+# импорт для inline-клавиатур
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
@@ -13,8 +16,16 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
-
 from models import User, SessionLocal
+
+# ————— Конфигурация тарифов —————
+TARIFFS = {
+    'БМ': ('Базовый на месяц',     50),
+    'БГ': ('Базовый на год',      350),
+    'РМ': ('Расширенный на месяц',300),
+    'РГ': ('Расширенный на год',  2200),
+}
+ALL_ADVISORS = list(specialists.keys())
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -123,17 +134,47 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     chat_id = update.effective_chat.id
     text = update.message.text.strip()
 
+    # ————— проверяем оплату тарифа —————
+    db   = SessionLocal()
+    user = db.query(User).filter_by(user_id=user_id).first()
+    db.close()
+    if not user or not user.tariff_paid:
+        return await update.message.reply_text(
+            "У вас нет активного тарифа. Выберите /tariff и дождитесь подтверждения оплаты."
+        )
+    # ————— сброс таймера при первом запросе после оплаты —————
+    if user.last_request < user.first_request:
+        db   = SessionLocal()
+        u_db = db.query(User).filter_by(user_id=user_id).first()
+        u_db.first_request = datetime.utcnow()
+        db.commit(); db.close()
+    # ————— проверяем срок действия —————
+    expires = user.tariff_expires()
+    if expires and expires < datetime.utcnow():
+        db   = SessionLocal()
+        u_db = db.query(User).filter_by(user_id=user_id).first()
+        u_db.tariff_paid = False
+        db.commit(); db.close()
+        return await update.message.reply_text("Срок вашего тарифа истёк. Повторите выбор /tariff")
+    # —————————————————————————————————————
+
     # Смена Советника — не считаем за запрос
     if text in specialists:
-        active_specialists[chat_id] = text
-        await update.message.reply_text(
+    # ————— для «базового» тарифа проверяем список выбранных советников —————
+         if user.tariff in ('БМ','БГ') and text not in user.advisors:
+             return await update.message.reply_text(
+                 "Этот советник не входит в ваш пакет. Сначала выберите /advisors"
+         )
+    # ——————————————————————————————————————————————————————————————— 
+    active_specialists[chat_id] = text
+    await update.message.reply_text(
             f'👋 Теперь вы общаетесь с Советником: <b>{text}</b>',
             parse_mode=ParseMode.HTML
         )
-        # Дополнительное приветствие из JSON
-        welcome_msg = specialists[text].get('welcome')
-        if welcome_msg:
-            await update.message.reply_text(welcome_msg)
+    # Дополнительное приветствие из JSON
+    welcome_msg = specialists[text].get('welcome')
+    if welcome_msg:
+        await update.message.reply_text(welcome_msg)
         return
 
     # Проверка лимитов
@@ -189,6 +230,57 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
     except Exception as e:
         await update.message.reply_text(f'❌ Ошибка при запросе к OpenAI: {e}')
+
+
+# ————— Новый хэндлер выбора тарифа —————
+async def cmd_tariff(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+     kb = InlineKeyboardMarkup(row_width=2)
+     for code,(name,price) in TARIFFS.items():
+         kb.insert(InlineKeyboardButton(f"{name} — {price}₽", callback_data=f"tariff|{code}"))
+     await update.message.reply_text("Выберите тариф:", reply_markup=kb)
+
+async def on_tariff_chosen(cq):
+     code = cq.data.split('|',1)[1]
+     db   = SessionLocal()
+     user = db.query(User).filter_by(user_id=cq.from_user.id).first()
+     user.tariff      = code
+     user.tariff_paid = False
+     user.advisors    = []
+     db.commit(); db.close()
+     await cq.answer(f"Выбран тариф «{TARIFFS[code][0]}». Ожидайте подтверждения оплаты.")
+# —————————————————————————————————————
+
+async def cmd_advisors(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+     user = SessionLocal().query(User).filter_by(user_id=update.effective_user.id).first()
+     if user.tariff not in ('БМ','БГ'):
+         return await update.message.reply_text("У вас расширенный пакет — доступны все советники.")
+     kb = InlineKeyboardMarkup(row_width=4)
+     for name in ALL_ADVISORS:
+         kb.insert(InlineKeyboardButton(
+             f"{'✅ ' if name in user.advisors else ''}{name}",
+             callback_data=f"adv|{name}"
+         ))
+     await update.message.reply_text("Выберите до двух советников:", reply_markup=kb)
+
+async def on_adv_choice(cq):
+     name = cq.data.split('|',1)[1]
+     db   = SessionLocal()
+     user = db.query(User).filter_by(user_id=cq.from_user.id).first()
+     if name in user.advisors:
+         user.advisors.remove(name)
+     else:
+         if len(user.advisors) >= 2:
+             return await cq.answer("Нельзя выбрать более двух.", show_alert=True)
+         user.advisors.append(name)
+     db.commit(); db.close()
+     await cq.answer(f"Текущий выбор: {', '.join(user.advisors) or '—'}")
+# —————————————————————————————————————
+
+     # Регистрация новых хэндлеров
+     app.add_handler(CommandHandler('tariff', cmd_tariff))
+     app.add_handler(MessageHandler(filters.Regex(r'^tariff\|'), on_tariff_chosen))
+     app.add_handler(CommandHandler('advisors', cmd_advisors))
+     app.add_handler(MessageHandler(filters.Regex(r'^adv\|'),   on_adv_choice))
 
 # Обработчик ошибок
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
