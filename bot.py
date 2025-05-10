@@ -25,7 +25,6 @@ TARIFFS = {
     'РМ': ('Расширенный на месяц',300),
     'РГ': ('Расширенный на год',  2200),
 }
-ALL_ADVISORS = list(specialists.keys())
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -52,6 +51,8 @@ for fname in os.listdir(ADVISORS_PATH):
         with open(os.path.join(ADVISORS_PATH, fname), encoding='utf-8') as f:
             data = json.load(f)
             specialists[data['name']] = data
+
+ALL_ADVISORS = list(specialists.keys())
 
 # Хранение текущего советника для каждого чата
 active_specialists: dict[int, str] = {}
