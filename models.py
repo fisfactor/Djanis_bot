@@ -19,4 +19,4 @@ class User(Base):
     is_admin     = Column(Boolean, default=False, nullable=False)
     first_request  = Column(DateTime,  default=datetime.utcnow, nullable=False)
     last_request = Column(DateTime, default=datetime.utcnow, nullable=False)
-    gender = Column(String, nullable=True)
+
