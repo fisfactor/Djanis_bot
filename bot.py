@@ -171,7 +171,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # —————————————————————————————————————
 
     # Смена Советника — не считаем за запрос
-    if text in specialists:
+    if text in specialists and active_specialists.get(chat_id) != text:
     # ————— для «базового» тарифа проверяем список выбранных советников —————
          if user.tariff in ('БМ','БГ') and text not in user.advisors:
              return await update.message.reply_text(
