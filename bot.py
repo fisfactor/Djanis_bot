@@ -137,9 +137,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     text = update.message.text.strip()
 
     # ————— проверяем оплату тарифа —————
+    # сначала регистрируем / проверяем тестовый запрос
+    if not check_and_update_usage(user_id):
+        # бесплатный лимит упёрся — просим оплатить
+        await prompt_payment(update)
+        return
+
+    # после этого точно есть user в БД (либо только что создан),
+    # можно дальше работать с тарифами и проверкой истечения
     db   = SessionLocal()
     user = db.query(User).filter_by(user_id=user_id).first()
     db.close()
+
     if not user or not user.tariff_paid:
         return await update.message.reply_text(
             "У вас нет активного тарифа. Выберите /tariff и дождитесь подтверждения оплаты."
@@ -300,9 +309,11 @@ if __name__ == '__main__':
     app.add_error_handler(error_handler)
     # Регистрация новых хэндлеров
     app.add_handler(CommandHandler('tariff', cmd_tariff))
-    app.add_handler(MessageHandler(filters.Regex(r'^tariff\|'), on_tariff_chosen))
+    # ловим колбэк от inline-кнопки «tariff|…»
+    app.add_handler(CallbackQueryHandler(on_tariff_chosen, pattern=r'^tariff\|'))
     app.add_handler(CommandHandler('advisors', cmd_advisors))
-    app.add_handler(MessageHandler(filters.Regex(r'^adv\|'),   on_adv_choice))
+    # ловим колбэк от inline-кнопки «adv|…»
+    app.add_handler(CallbackQueryHandler(on_adv_choice,   pattern=r'^adv\|'))
 
     app.run_webhook(
         listen='0.0.0.0',
