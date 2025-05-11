@@ -72,7 +72,7 @@ def check_and_update_usage(user_id: int) -> bool:
             usage_count=1,
             first_request=now,
             last_request=now,
-            is_admin=(user_id in ADMIN_IDS)
+            is_admin=(user_id in ADMIN_IDS),
             tariff_paid=True
         )
         db.add(user)
