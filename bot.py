@@ -13,6 +13,7 @@ from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
+    CallbackQueryHandler,
     ContextTypes,
     filters,
 )
@@ -277,12 +278,6 @@ async def on_adv_choice(cq):
      await cq.answer(f"Текущий выбор: {', '.join(user.advisors) or '—'}")
 # —————————————————————————————————————
 
-     # Регистрация новых хэндлеров
-     app.add_handler(CommandHandler('tariff', cmd_tariff))
-     app.add_handler(MessageHandler(filters.Regex(r'^tariff\|'), on_tariff_chosen))
-     app.add_handler(CommandHandler('advisors', cmd_advisors))
-     app.add_handler(MessageHandler(filters.Regex(r'^adv\|'),   on_adv_choice))
-
 # Обработчик ошибок
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logging.error('Ошибка при обработке запроса', exc_info=context.error)
@@ -303,6 +298,11 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('start', start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_error_handler(error_handler)
+    # Регистрация новых хэндлеров
+    app.add_handler(CommandHandler('tariff', cmd_tariff))
+    app.add_handler(MessageHandler(filters.Regex(r'^tariff\|'), on_tariff_chosen))
+    app.add_handler(CommandHandler('advisors', cmd_advisors))
+    app.add_handler(MessageHandler(filters.Regex(r'^adv\|'),   on_adv_choice))
 
     app.run_webhook(
         listen='0.0.0.0',
